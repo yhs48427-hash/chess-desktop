@@ -6,10 +6,13 @@
      이 폴더의 _deps 에 따로 설치합니다 (그 환경 자체는 건드리지 않음).
      못 찾으면 이 폴더에 .venv 를 만들고 모두 설치합니다 (NVIDIA GPU가 있으면 CUDA 버전, 약 2.5GB).
   2) 학습된 모델 파일: ckpt/ 에 없으면 PC 에서 찾아 복사합니다
-     (예전 chess_app\\ckpt, 다운로드 폴더, Google Drive 데스크톱 폴더, 바탕 화면\\CHESS 아래).
-     그래도 없으면 Drive 파일 페이지를 열고, 다운로드 폴더에 받아지는 대로 가져옵니다.
+     (예전 chess_app\\ckpt, 다운로드 폴더의 .pt 나 chess_desktop.zip, Google Drive 데스크톱 폴더, 바탕 화면\\CHESS 아래).
+     그래도 없으면 GitHub Releases 의 chess_desktop.zip 을 받아 모델 파일만 꺼냅니다.
+     자동으로 받지 못하면 Releases 페이지를 열고, 다운로드 폴더에 zip 이 받아지는 대로 가져옵니다.
+     --ckpt 로 다른 모델을 고르면 그 파일이 있는지만 확인합니다.
 그다음부터는 바로 앱 창을 띄웁니다. 추가 옵션은 app.py 로 넘어갑니다. 예) run.bat --device cpu
 """
+import argparse
 import glob
 import importlib.util
 import json
@@ -18,6 +21,7 @@ import shutil
 import subprocess
 import sys
 import time
+import urllib.request
 import webbrowser
 import zipfile
 
@@ -28,8 +32,10 @@ VENV_PY = os.path.join(VENV, "Scripts", "python.exe") if IS_WIN else os.path.joi
 DEPS = os.path.join(ROOT, "_deps")                 # 다른 환경을 빌려 쓸 때 PySide6 를 넣는 곳
 RUNTIME = os.path.join(ROOT, ".runtime.json")      # 빌려 쓰는 Python 경로 기록
 
-DRIVE_FILE_IDS = {"round04_2025-04.pt": "1k4TUYix1oXuMua1usLe1DGVFJiLFzT_8"}
-DRIVE_CKPT_FOLDER = "https://drive.google.com/drive/folders/1aZJk-L2rYiIse-Dx63Uu-MbgjN0bByyw"
+GITHUB_REPO = "yhs48427-hash/chess-desktop"
+RELEASE_PAGE = f"https://github.com/{GITHUB_REPO}/releases/latest"
+RELEASE_ZIP = "chess_desktop.zip"                  # Release 에 올리는 실행 묶음 (안에 ckpt/*.pt 포함)
+RELEASE_ZIP_URL = f"{RELEASE_PAGE}/download/{RELEASE_ZIP}"
 
 CORE = ("torch", "chess", "numpy")
 GUI = "PySide6"
@@ -230,13 +236,24 @@ def local_drive_roots():
             if mask & (1 << i) and k32.GetDriveTypeW(f"{c}:\\") in (3, 4)]
 
 
+def mtime(path):
+    try:
+        return os.path.getmtime(path)
+    except OSError:
+        return 0.0
+
+
 def find_ckpt(name):
     home = os.path.expanduser("~")
     paths = [os.path.join(r, d, "chess", "ckpt", name) for r in local_drive_roots() for d in ("내 드라이브", "My Drive")]
     paths += [os.path.join(home, d, "chess", "ckpt", name) for d in ("Google Drive", "내 드라이브", "My Drive")]
+    dl = glob.escape(downloads_dir())
     stem = os.path.splitext(name)[0]
-    paths += sorted(glob.glob(os.path.join(downloads_dir(), glob.escape(stem) + "*.pt")),
-                    key=lambda p: os.path.getmtime(p), reverse=True)
+    paths += sorted(glob.glob(os.path.join(dl, glob.escape(stem) + "*.pt")), key=mtime, reverse=True)
+    # 다운로드 폴더에 chess_desktop.zip 을 풀어 둔 경우 (예: 다운로드\chess_desktop\chess_desktop\ckpt\<name>)
+    unzipped = os.path.join(dl, glob.escape(os.path.splitext(RELEASE_ZIP)[0]) + "*")
+    paths += glob.glob(os.path.join(unzipped, "ckpt", glob.escape(name)))
+    paths += glob.glob(os.path.join(unzipped, "*", "ckpt", glob.escape(name)))
     for p in paths:
         if is_valid_ckpt(p):
             return p
@@ -266,36 +283,153 @@ def place(src, target):
     say(f"모델 파일을 가져왔습니다: {src}")
 
 
+FAILED_ZIPS = set()   # 모델 파일을 꺼내지 못한 zip 경로 (기다리는 동안 같은 파일을 다시 시도하지 않음)
+
+
+def zip_member(zpath, name):
+    """zip 안에서 모델 파일 항목 이름을 찾음 (ckpt/ 아래 것 먼저). 없거나 아직 다 받지 않은 zip 이면 None."""
+    try:
+        with zipfile.ZipFile(zpath) as z:
+            names = z.namelist()
+    except Exception:
+        return None
+    hits = [n for n in names if n.replace("\\", "/").rsplit("/", 1)[-1] == name]
+    hits.sort(key=lambda n: ("ckpt/" not in n.replace("\\", "/"), len(n)))
+    return hits[0] if hits else None
+
+
+def extract_ckpt(zpath, member, target, label=None):
+    """zip 안의 모델 파일을 target 으로 꺼냄. 꺼낸 파일이 정상이면 True. label: 화면에 보일 zip 이름."""
+    label = label or zpath
+    os.makedirs(os.path.dirname(target), exist_ok=True)
+    tmp = target + ".copying"
+    try:
+        with zipfile.ZipFile(zpath) as z, z.open(member) as src, open(tmp, "wb") as dst:
+            shutil.copyfileobj(src, dst, 1 << 20)
+        if is_valid_ckpt(tmp):
+            os.replace(tmp, target)
+            say(f"모델 파일을 가져왔습니다: {label} 안의 {member}")
+            return True
+        say(f"  {label} 안의 {member} 는 올바른 모델 파일이 아닙니다.")
+    except Exception as e:
+        say(f"  {label} 에서 모델 파일을 꺼내지 못했습니다: {e}")
+    FAILED_ZIPS.add(zpath)
+    try:
+        os.remove(tmp)
+    except OSError:
+        pass
+    return False
+
+
+def find_release_zip(name):
+    """다운로드 폴더에서 모델 파일이 든 chess_desktop*.zip 을 찾음 (최근 것부터). 없으면 (None, None)."""
+    stem = os.path.splitext(RELEASE_ZIP)[0]
+    zips = glob.glob(os.path.join(glob.escape(downloads_dir()), glob.escape(stem) + "*.zip"))
+    for z in sorted(zips, key=mtime, reverse=True):
+        member = None if z in FAILED_ZIPS else zip_member(z, name)
+        if member:
+            return z, member
+    return None, None
+
+
+def take_local(name, target):
+    """PC 에 이미 있는 모델 파일, 또는 다운로드 폴더의 chess_desktop zip 에서 가져옴. 가져왔으면 True."""
+    src = find_ckpt(name)
+    if src:
+        place(src, target)
+        return True
+    zpath, member = find_release_zip(name)
+    return bool(zpath) and extract_ckpt(zpath, member, target)
+
+
+def download(url, dest):
+    """url 을 dest 로 받음. 실패하면 이유를 출력하고 False."""
+    shown = False
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "chess-desktop"})
+        with urllib.request.urlopen(req, timeout=60) as r, open(dest, "wb") as f:
+            total = int(r.headers.get("Content-Length") or 0)
+            done = 0
+            while True:
+                buf = r.read(1 << 20)
+                if not buf:
+                    break
+                f.write(buf)
+                done += len(buf)
+                size = f"{done / 1e6:.1f} / {total / 1e6:.1f} MB" if total else f"{done / 1e6:.1f} MB"
+                print(f"\r  받는 중... {size}", end="", flush=True)
+                shown = True
+        if total and done != total:
+            raise OSError(f"{total} 바이트 중 {done} 바이트만 받았습니다")
+        if shown:
+            say()
+        return True
+    except Exception as e:      # 인터넷·프록시·방화벽 문제 등: 브라우저로 직접 받는 쪽으로 넘어감
+        if shown:
+            say()
+        say(f"  받지 못했습니다: {e}")
+        try:
+            os.remove(dest)
+        except OSError:
+            pass
+        return False
+
+
+def ckpt_arg(argv):
+    """app.py 로 넘길 인자 중 --ckpt 값 (app.py 와 같은 argparse 규칙). 없으면 None."""
+    ap = argparse.ArgumentParser(prog="run.bat", add_help=False)
+    ap.add_argument("--ckpt", default=None)
+    return ap.parse_known_args(argv)[0].ckpt
+
+
 def ensure_checkpoint():
     with open(os.path.join(ROOT, "ckpt", "LATEST.json"), encoding="utf-8") as f:
         rel = json.load(f)["ckpt"]
     target = os.path.join(ROOT, *rel.split("/"))
     name = os.path.basename(target)
-    if is_valid_ckpt(target):
+    arg = ckpt_arg(sys.argv[1:])
+    if arg:
+        chosen = arg if os.path.isabs(arg) else os.path.join(ROOT, arg)
+        if not same_path(chosen, target):
+            # --ckpt 로 다른 모델을 골랐으면 그 파일만 확인 (현재 모델은 찾거나 받지 않음)
+            if os.path.isfile(chosen):
+                return
+            fail(f"--ckpt 로 지정한 모델 파일이 없습니다: {chosen}\n"
+                 "파일을 ckpt 폴더에 넣었는지, 경로가 맞는지 확인하세요.")
+    if is_valid_ckpt(target) or take_local(name, target):
         return
-    src = find_ckpt(name)
-    if src:
-        return place(src, target)
-    fid = DRIVE_FILE_IDS.get(name)
-    url = f"https://drive.google.com/file/d/{fid}/view" if fid else DRIVE_CKPT_FOLDER
+
+    say(f"학습된 모델 파일({name}, 약 35MB)이 없어 GitHub Releases 의 {RELEASE_ZIP} 에서 꺼냅니다.")
+    say(f"  {RELEASE_ZIP_URL}")
+    part = os.path.join(ROOT, "ckpt", RELEASE_ZIP + ".part")
+    if download(RELEASE_ZIP_URL, part):
+        try:
+            member = zip_member(part, name)
+            if member and extract_ckpt(part, member, target, label=f"Releases 의 {RELEASE_ZIP}"):
+                return
+            if not member:
+                say(f"  받은 파일에서 {name} 을 찾지 못했습니다.")
+        finally:
+            try:
+                os.remove(part)
+            except OSError:
+                pass
+
     dl = downloads_dir()
-    say(f"학습된 모델 파일({name}, 약 35MB)을 PC에서 찾지 못했습니다.")
-    say("브라우저에 Google Drive 파일 페이지를 엽니다. 오른쪽 위의 다운로드 버튼을 눌러 주세요.")
-    say(f"다운로드 폴더({dl})에 받아지는 대로 자동으로 가져옵니다. 직접 넣어도 됩니다: {target}")
-    webbrowser.open(url)
+    say("브라우저에 Releases 페이지를 엽니다. Assets 의 chess_desktop.zip 을 눌러 받아 주세요.")
+    say(f"다운로드 폴더({dl})에 받아지는 대로 자동으로 가져옵니다 (압축은 풀지 않아도 됩니다).")
+    say(f"모델 파일을 직접 넣어도 됩니다: {target}")
+    webbrowser.open(RELEASE_PAGE)
     t0, last = time.time(), 0.0
     while time.time() - t0 < WAIT_DOWNLOAD_SEC:
-        if is_valid_ckpt(target):
+        if is_valid_ckpt(target) or take_local(name, target):
             return
-        src = find_ckpt(name)
-        if src:
-            return place(src, target)
         if time.time() - last > 30:
             say("  모델 파일을 기다리는 중...")
             last = time.time()
         time.sleep(2)
-    fail(f"{WAIT_DOWNLOAD_SEC // 60}분 동안 모델 파일을 찾지 못했습니다. "
-         f"Drive의 chess/ckpt/{name} 을 받아 {target} 에 두고 다시 실행하세요.")
+    fail(f"{WAIT_DOWNLOAD_SEC // 60}분 동안 모델 파일을 찾지 못했습니다. {RELEASE_PAGE} 에서 "
+         f"{RELEASE_ZIP} 을 받아, 그 안의 ckpt/{name} 을 {target} 에 두고 다시 실행하세요.")
 
 
 def main():

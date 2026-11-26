@@ -1,5 +1,5 @@
 @echo off
-rem Chess win-probability web app. Double-click to start; close this window to stop.
+rem Chess win-probability desktop app. Double-click to start; close this window to stop.
 setlocal
 cd /d "%~dp0"
 set PYTHONUTF8=1
