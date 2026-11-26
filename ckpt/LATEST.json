@@ -1,0 +1,18 @@
+{
+  "ckpt": "ckpt/round04_2025-04.pt",
+  "round": 4,
+  "months": [
+    "2024-01",
+    "2025-01",
+    "2025-02",
+    "2025-03",
+    "2025-04"
+  ],
+  "history": [
+    {"round": 0, "month": "2024-01", "ckpt": "ckpt/base.pt", "improved": true, "time": "2026-10-24 07:04"},
+    {"round": 1, "month": "2025-01", "ckpt": "ckpt/round01_2025-01.pt", "improved": true, "time": "2026-10-29 13:37"},
+    {"round": 2, "month": "2025-02", "ckpt": "ckpt/round02_2025-02.pt", "improved": true, "time": "2026-11-15 14:42"},
+    {"round": 3, "month": "2025-03", "ckpt": "ckpt/round03_2025-03.pt", "improved": true, "time": "2026-11-18 12:24"},
+    {"round": 4, "month": "2025-04", "ckpt": "ckpt/round04_2025-04.pt", "improved": true, "time": "2026-11-18 15:28"}
+  ]
+}
