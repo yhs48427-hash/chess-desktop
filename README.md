@@ -9,7 +9,8 @@
    화면 라이브러리(PySide6)만 이 폴더의 `_deps`에 따로 설치합니다. 예전 환경 자체는 건드리지 않습니다.
    찾지 못하면 이 폴더에 `.venv`를 만들고 PyTorch(GPU가 있으면 CUDA 버전, 약 2.5GB)부터 모두 설치합니다.
 2. **모델 파일**: Release의 chess_desktop.zip에 학습된 모델 `ckpt/round04_2025-04.pt`(35MB)가 들어 있습니다.
-   저장소 코드만 받았다면(Code → Download ZIP, `git clone`) Release에서 이 파일을 받아 `ckpt/` 폴더에 넣으세요.
+   저장소 코드만 받았다면(Code → Download ZIP, `git clone`) 이 단계에서 Release의 chess_desktop.zip을 받아 모델 파일만 `ckpt/`에 꺼내 둡니다.
+   자동으로 받지 못하면 Release 페이지가 열립니다. 거기서 chess_desktop.zip을 받으면 다운로드 폴더에서 알아서 가져옵니다.
 3. 앱 창을 엽니다.
 
 두 번째부터는 3번만 합니다. 검은 창(로그)을 닫으면 앱도 꺼집니다.
@@ -40,7 +41,8 @@
 | `run.bat --ckpt ckpt/round03_2025-03.pt` | 다른 체크포인트 (파일을 `ckpt/`에 직접 넣어 두세요) |
 | `run.bat --engine C:\stockfish\stockfish.exe --calib results/calib.json` | Stockfish 평가를 모델 입력에 넣고, 계산 설정에서 "Stockfish + 보정"을 쓸 수 있게 함 |
 
-새 라운드 모델이 생기면 Drive의 `ckpt/LATEST.json`과 새 `.pt`를 이 폴더의 `ckpt/`에 덮어쓰면 됩니다.
+새 모델이 나오면 Releases에서 새 chess_desktop.zip을 받으세요. 쓰던 폴더를 그대로 두려면 zip 안의 `ckpt/`(`LATEST.json`과 새 `.pt`)만 이 폴더의 `ckpt/`에 덮어써도 됩니다.
+저장소를 `git clone`으로 받았다면 `git pull` 뒤에 실행하면 새 모델을 자동으로 받습니다.
 
 ## 폴더 구성
 
@@ -49,16 +51,17 @@ chess_desktop/
 ├─ run.bat            더블클릭으로 실행 (Windows)
 ├─ start.py           환경 준비, 모델 파일 찾기, 앱 실행
 ├─ app.py             앱 화면 (PySide6)
-├─ analysis.py        계산부 (웹 버전 server.py 의 계산 코드와 같음)
-├─ chesswdl/          Drive chess/chesswdl 에서 추론에 필요한 파일만 옮긴 사본
-├─ ckpt/             LATEST.json + round04_2025-04.pt (모델 파일은 Release 의 zip 에 포함)
-├─ results/calib.json 엔진 보정 파일 (Drive 의 것과 같은 값)
+├─ analysis.py        계산부 (PGN·수순 → 포지션별 승률과 다음 수 확률)
+├─ chesswdl/          학습 코드에서 추론에 필요한 파일만 옮긴 사본
+├─ ckpt/              LATEST.json + round04_2025-04.pt (모델 파일은 Release 의 zip 에 포함)
+├─ results/calib.json 엔진 보정 파일
 └─ fonts/             Hahmlet, Gothic A1 (SIL Open Font License, 라이선스 파일 포함)
 ```
 
 ## 문제가 생기면
 
 - **"Python 3.9+ was not found"**: https://www.python.org 에서 Python을 설치하고 "Add python.exe to PATH"를 체크한 뒤 다시 실행하세요.
+- **모델 파일을 받지 못할 때**: [Releases](https://github.com/yhs48427-hash/chess-desktop/releases/latest)에서 chess_desktop.zip을 받아 압축을 풀고, 안의 `ckpt/round04_2025-04.pt`를 이 폴더의 `ckpt/`에 넣은 뒤 다시 실행하세요.
 - **창이 안 뜨고 PySide6 오류가 날 때**: `_deps` 폴더를 지우고 다시 실행하세요.
 - **다른 환경을 쓰게 하고 싶을 때**: `.runtime.json`을 지우면 다음 실행 때 다시 찾습니다.
 - **GPU가 있는데 CPU로 돈다고 나올 때**: 다시 쓰는 환경의 PyTorch가 CPU 버전인 경우입니다. `.runtime.json`을 지우고, 이 폴더에 `.venv`를 새로 만들게 하려면 예전 `.venv`를 찾지 못하는 곳으로 옮긴 뒤 실행하세요.

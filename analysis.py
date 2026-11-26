@@ -36,7 +36,7 @@ FILT = GameFilter(rated_only=False, min_est_sec=0, max_est_sec=1e12, require_elo
 
 
 class UserError(Exception):
-    """사용자 입력 문제 → HTTP 400 으로 메시지 그대로 전달."""
+    """사용자 입력 문제 → 앱 화면에 메시지를 그대로 보여 줌."""
 
 
 def r4(x):
@@ -167,7 +167,7 @@ class Analyzer:
         if weighted not in ("off", "model", "engine"):
             raise UserError("weighted 는 off, model, engine 중 하나여야 합니다.")
         if weighted == "engine" and not self.engine_value:
-            raise UserError("엔진 평가 방식은 서버를 --engine 과 --calib 로 실행했을 때만 쓸 수 있습니다.")
+            raise UserError("엔진 평가 방식은 run.bat 을 --engine 과 --calib 옵션으로 실행했을 때만 쓸 수 있습니다.")
         top_p = float(req.get("top_p") or self.top_p)
         if not 0.0 < top_p <= 1.0:
             raise UserError("top_p 는 0보다 크고 1 이하여야 합니다.")
@@ -331,7 +331,8 @@ def resolve_ckpt(arg):
         path = os.path.join(ROOT, path)
     if not os.path.exists(path):
         raise SystemExit(f"체크포인트 파일이 없습니다: {path}\n"
-                         "Drive의 chess/ckpt 에서 받아 같은 경로에 두거나 --ckpt 로 지정하세요.")
+                         "GitHub Releases 의 chess_desktop.zip 안 ckpt 폴더의 파일을 같은 경로에 두거나 --ckpt 로 지정하세요 "
+                         "(run.bat 으로 실행하면 현재 모델은 자동으로 받습니다).")
     if arg and latest.get("ckpt") and os.path.normpath(os.path.join(ROOT, latest["ckpt"])) != os.path.normpath(path):
         latest = {}   # LATEST 가 아닌 모델이면 라운드 정보는 표시하지 않음
     return path, latest
