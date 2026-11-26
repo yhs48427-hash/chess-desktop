@@ -7,7 +7,7 @@
      못 찾으면 이 폴더에 .venv 를 만들고 모두 설치합니다 (NVIDIA GPU가 있으면 CUDA 버전, 약 2.5GB).
   2) 학습된 모델 파일: ckpt/ 에 없으면 PC 에서 찾아 복사합니다
      (예전 chess_app\\ckpt, 다운로드 폴더, Google Drive 데스크톱 폴더, 바탕 화면\\CHESS 아래).
-     그래도 없으면 GitHub 파일 페이지를 열고, 다운로드 폴더에 받아지는 대로 가져옵니다.
+     그래도 없으면 Drive 파일 페이지를 열고, 다운로드 폴더에 받아지는 대로 가져옵니다.
 그다음부터는 바로 앱 창을 띄웁니다. 추가 옵션은 app.py 로 넘어갑니다. 예) run.bat --device cpu
 """
 import glob
@@ -28,7 +28,8 @@ VENV_PY = os.path.join(VENV, "Scripts", "python.exe") if IS_WIN else os.path.joi
 DEPS = os.path.join(ROOT, "_deps")                 # 다른 환경을 빌려 쓸 때 PySide6 를 넣는 곳
 RUNTIME = os.path.join(ROOT, ".runtime.json")      # 빌려 쓰는 Python 경로 기록
 
-PUBLIC_CKPT_URL = "https://github.com/yhs48427-hash/chess-desktop/blob/main/ckpt"
+DRIVE_FILE_IDS = {"round04_2025-04.pt": "1k4TUYix1oXuMua1usLe1DGVFJiLFzT_8"}
+DRIVE_CKPT_FOLDER = "https://drive.google.com/drive/folders/1aZJk-L2rYiIse-Dx63Uu-MbgjN0bByyw"
 
 CORE = ("torch", "chess", "numpy")
 GUI = "PySide6"
@@ -275,10 +276,11 @@ def ensure_checkpoint():
     src = find_ckpt(name)
     if src:
         return place(src, target)
-    url = f"{PUBLIC_CKPT_URL}/{name}"
+    fid = DRIVE_FILE_IDS.get(name)
+    url = f"https://drive.google.com/file/d/{fid}/view" if fid else DRIVE_CKPT_FOLDER
     dl = downloads_dir()
     say(f"학습된 모델 파일({name}, 약 35MB)을 PC에서 찾지 못했습니다.")
-    say("브라우저에 GitHub 모델 페이지를 엽니다. Download raw file 버튼을 눌러 주세요.")
+    say("브라우저에 Google Drive 파일 페이지를 엽니다. 오른쪽 위의 다운로드 버튼을 눌러 주세요.")
     say(f"다운로드 폴더({dl})에 받아지는 대로 자동으로 가져옵니다. 직접 넣어도 됩니다: {target}")
     webbrowser.open(url)
     t0, last = time.time(), 0.0
@@ -293,7 +295,7 @@ def ensure_checkpoint():
             last = time.time()
         time.sleep(2)
     fail(f"{WAIT_DOWNLOAD_SEC // 60}분 동안 모델 파일을 찾지 못했습니다. "
-         f"GitHub 저장소의 ckpt/{name} 을 받아 {target} 에 두고 다시 실행하세요.")
+         f"Drive의 chess/ckpt/{name} 을 받아 {target} 에 두고 다시 실행하세요.")
 
 
 def main():
